@@ -2,12 +2,12 @@ import installReload from "./hmr";
 import installRequest from "./request";
 import config from "../../config";
 import axios from "axios";
-import {getDate} from "../../utils/date";
+import { getDate } from "../../utils/date";
 
 // 安装热刷新功能
 installReload();
 installRequest();
-console.log("chrome extension ...")
+console.log("chrome extension ...");
 
 
 // 监听长连接
@@ -71,7 +71,7 @@ function notification() {
 
             notification.addEventListener('click', function () {
                 //window.open("chrome-extension://" + chrome.runtime.id + "/newtab.html")
-                overtimeClockIn()
+                //overtimeClockIn()
                 notification.close()
             });
         }

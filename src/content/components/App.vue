@@ -1,8 +1,13 @@
 <template>
   <div v-if="show" id="OvertimeClockIn">
-    <el-button plain type="primary" size="mini" :loading="loading" @click="overtimeClockIn">
-      {{ buttonTitle }}
-    </el-button>
+    <el-popconfirm
+        title="确认一下打卡时间？"
+        @confirm="overtimeClockIn"
+    >
+      <el-button slot="reference" plain type="primary" size="mini" :loading="loading" >
+        {{ buttonTitle }}
+      </el-button>
+    </el-popconfirm>
   </div>
 </template>
 
@@ -35,10 +40,14 @@ export default {
       if (!res.data.data.success) {
         this.buttonTitle = res.data.data.msg;
       } else {
-        this.buttonTitle = "打卡成功，注意休息哦";
+        this.buttonTitle = "打卡成功，早点休息，明天会更好~";
         setTimeout(() => {
           this.show = false;
         }, 2000);
+        this.$message({
+          message: "打卡成功，早点休息，明天会更好~",
+          type: "success"
+        });
       }
     },
 

@@ -4,10 +4,20 @@
 
     <br>
 
-    当前时间 {{ date }}  {{ time }}
-    <el-button plain type="primary" size="mini" @click="overtimeClockIn" :loading="loading" :disabled="disabled">
-      {{ overtimeClockInMsg }}
-    </el-button>
+    当前数据环境 {{ environment }}
+
+    <br>
+
+    当前时间 {{ date }} {{ time }}
+    <el-popconfirm
+        title="确认一下打卡时间？"
+        @confirm="overtimeClockIn"
+
+    >
+      <el-button slot="reference" plain type="primary" size="mini" :loading="loading" :disabled="disabled">
+        {{ overtimeClockInMsg }}
+      </el-button>
+    </el-popconfirm>
   </div>
   <div v-else>
     登录成功后刷新当前页
@@ -31,6 +41,7 @@ export default {
       time: getTime(),
       disabled: false,
       loading: false,
+      environment: config.oaHost,
       overtimeClockInMsg: "加班打卡"
     };
   },
@@ -63,6 +74,10 @@ export default {
         if (response.data.success) {
           this.overtimeClockInMsg = "打卡成功";
           this.disabled = true;
+          this.$message({
+            message: "打卡成功，早点休息，明天会更好~",
+            type: "success"
+          });
         } else {
           this.overtimeClockInMsg = response.data.msg;
         }
