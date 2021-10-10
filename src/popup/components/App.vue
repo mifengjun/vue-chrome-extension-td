@@ -1,6 +1,6 @@
 <template>
   <div>
-    hello asdasd
+    简易工作台
   </div>
 </template>
 

@@ -1,129 +1,90 @@
 import installReload from "./hmr";
 import installRequest from "./request";
+import config from "../../config";
+import axios from "axios";
+import {getDate} from "../../utils/date";
 
 // 安装热刷新功能
 installReload();
 installRequest();
+console.log("chrome extension ...")
 
-console.log(
-  "this info show of chrome-extension-memo background.js \r\n  follow me https://github.com/lvgocc"
-);
 
-// 记录用户第一次使用的时间，当然，这个如果你想，随时可以删除这个信息
-chrome.storage.sync.get("firstTime", result => {
-  if (!result.firstTime) {
-    chrome.storage.sync.set({ firstTime: new Date().toLocaleString() });
-  }
-});
+// 监听长连接
+chrome.runtime.onConnect.addListener(function (connect) {
+    if (connect.name === 'chrome-extendsion-connect') {
+        connect.onMessage.addListener(function (request) {
+            switch (request.functionName) {
+                case "getOvertimeClockIn":
+                    getOvertimeClockIn(connect);
+                    break;
+                case "overtimeClockIn":
+                    overtimeClockIn(connect);
+                    break;
+                default:
+                    break;
+            }
 
-/**
- * 后台请求前端数据
- * @param queryParam 请求参数
- * {type:0,data:{xx:sss}}
- *  type 0 获取当前浏览器滚动条高度
- * @param callback 对结果处理
- */
-function connectExtension(queryParam, callback) {
-  chrome.tabs.getSelected(null, function(tab) {
-    chrome.tabs.sendRequest(tab.id, queryParam, function(response) {
-      if (callback) callback(response);
-    });
-  });
-}
-
-function saveMemoToChromeStorage(memoItem) {
-  const memo = [];
-  chrome.storage.sync.get("memo", result => {
-    if (!result.memo) result.memo = memo;
-    result.memo.push(memoItem);
-    chrome.storage.sync.set(result);
-  });
-  // 通知插件，新增完成。更新页面
-  connectExtension({ type: 1 });
-}
-
-/**
- * 增加备忘录
- * @param onClickData 当前选中的内容信息
- */
-function addMemo(onClickData) {
-  if (!onClickData.pageUrl.startsWith("http")) {
-    const memoItem = {
-      title: "新增备忘",
-      date: new Date().toLocaleString(),
-      url: "",
-      memo: onClickData.selectionText,
-      scrollTop: 0
-    };
-    saveMemoToChromeStorage(memoItem);
-  } else {
-    connectExtension({ type: 0 }, response => {
-      // 通过 getSelected 选择当前活动的 tab 页面，获取 tab 页信息
-      chrome.tabs.getSelected(null, tab => {
-        chrome.tabs.get(tab.id, tabInfo => {
-          const memoItem = {
-            date: new Date().toLocaleString(),
-            url: tabInfo.url || "",
-            memo: onClickData.selectionText,
-            scrollTop: response || 0
-          };
-          saveMemoToChromeStorage(memoItem);
         });
-      });
-    });
-  }
+    }
+});
+
+async function getOvertimeClockIn(connect) {
+    var url = config.oaHost + "/api/proc/list/sent?pageNum=1&pageSize=20&filter=" + config.overtimeClockInFilter + "&start=" + getDate() + "&end=" + getDate() + "&pending=false"
+    var res = await axios.get(url);
+    connect.postMessage({name: 'getOvertimeClockIn', data: res});
 }
 
-/**
- * memo 右键菜单
- */
-chrome.contextMenus.create({
-  title: "新增备忘内容",
-  onclick: function(onClickData) {
-    let memo = prompt("新增备忘内容", "输入要记录的内容");
-    if (!memo) return;
-    onClickData.selectionText = memo;
-    addMemo(onClickData);
-  }
-});
-
-/*
-title: '使用Baidu搜索：“%s”',
-    contexts: ['selection'],
-    onclick: function (params) {
-        chrome.tabs.create(
-            {url: 'https://www.baidu.com/s?ie=utf-8&wd=' + encodeURI(params.selectionText)}
-        );
+async function overtimeClockIn(connect) {
+    var res;
+    var user = await getCurrentUser();
+    if (!user.data.success) {
+        res = user;
+    } else {
+        var url = config.oaHost + "/api/proc/list/sent?pageNum=1&pageSize=20&filter=" + config.overtimeClockInFilter + "&start=" + getDate() + "&end=" + getDate() + "&pending=false"
+        res = await axios.get(url);
+        if (res.data.success && res.data.data.list.length === 0) {
+            var paramData = {"reason": "加班", "workcode": user.data.data.jobNumber};
+            var data = {"flowKey": "jbsq", "version": 37, "formKey": "default", "data": JSON.stringify(paramData)};
+            res = await axios.post(config.oaHost + "/api/proc/ru/submit", data);
+        }
+        // 中止通知
+        clearInterval(notice);
     }
- */
-//
-// chrome.contextMenus.create({
-//     title: "添加选中内容至备忘录",
-//     contexts: ['selection'],
-//     onclick: function (onClickData) {
-//         addMemo(onClickData);
-//     }
-// });
+    connect.postMessage({name: 'overtimeClockIn', data: res});
+}
 
-/**
- * 监听扩展图标单击事件
- */
-chrome.browserAction.onClicked.addListener(function(tab) {
-  // 在該 chrome tabs 上執行 contentScript.js 這隻檔案
-  // chrome.tabs.executeScript(null, { file: 'contentScript.bundle.js' });
-  chrome.tabs.create({
-    url: "chrome-extension://jfnhnkbdnaeiiblkjifcplfinamdakje/newtab.html"
-  });
-});
+async function getCurrentUser() {
+    return await axios.get(config.oaHost + "/api/auth/current");
+}
 
-/**
- * 长连接
- */
-chrome.extension.onConnect.addListener(function(port) {
-  // console.log('port.name = ' + port.name);
-  port.onMessage.addListener(function(msg) {
-    console.log("msg = " + msg);
-    // 发送消息
-    port.postMessage("连接成功。。。。");
-  });
-});
+
+
+function notification() {
+    var url = config.oaHost + "/api/proc/list/sent?pageNum=1&pageSize=20&filter=" + config.overtimeClockInFilter + "&start=" + getDate() + "&end=" + getDate() + "&pending=false"
+    axios.get(url).then(res => {
+        if (res.data.success && res.data.data.list.length === 0) {
+            var notification = new Notification('嘿！', {
+                body: '加班辛苦了，记得打卡哦',
+                icon: '/assets/clock.png',// "图标路径，若不指定默认为favicon"
+            });
+
+            notification.addEventListener('click', function () {
+                //window.open("chrome-extension://" + chrome.runtime.id + "/newtab.html")
+                overtimeClockIn()
+                notification.close()
+            });
+        }
+    });
+}
+
+notification();
+
+var notice;
+var flag = true;
+// 超过配置的时间后，开始检测是否打开
+if (new Date().getHours() >= config.Hour && flag) {
+    notice = setInterval(() => {
+        notification()
+    }, 60000 * 30);
+}
