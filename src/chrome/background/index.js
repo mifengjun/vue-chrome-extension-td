@@ -2,13 +2,15 @@ import installReload from "./hmr";
 import installRequest from "./request";
 import config from "../../config";
 import axios from "axios";
-import { getDate } from "../../utils/date";
+import {getDate} from "../../utils/date";
 
 // 安装热刷新功能
 installReload();
 installRequest();
 console.log("chrome extension ...");
 
+var notice;
+var flag = true;
 
 // 监听长连接
 chrome.runtime.onConnect.addListener(function (connect) {
@@ -47,6 +49,7 @@ async function overtimeClockIn(connect) {
             var paramData = {"reason": "加班", "workcode": user.data.data.jobNumber};
             var data = {"flowKey": "jbsq", "version": 37, "formKey": "default", "data": JSON.stringify(paramData)};
             res = await axios.post(config.oaHost + "/api/proc/ru/submit", data);
+            flag = false;
         }
         // 中止通知
         clearInterval(notice);
@@ -59,32 +62,29 @@ async function getCurrentUser() {
 }
 
 
-
 function notification() {
-    var url = config.oaHost + "/api/proc/list/sent?pageNum=1&pageSize=20&filter=" + config.overtimeClockInFilter + "&start=" + getDate() + "&end=" + getDate() + "&pending=false"
-    axios.get(url).then(res => {
-        if (res.data.success && res.data.data.list.length === 0) {
-            var notification = new Notification('嘿！', {
-                body: '加班辛苦了，记得打卡哦',
-                icon: '/assets/clock.png',// "图标路径，若不指定默认为favicon"
-            });
+    if (new Date().getHours() >= config.Hour && flag) {
+        var url = config.oaHost + "/api/proc/list/sent?pageNum=1&pageSize=20&filter=" + config.overtimeClockInFilter + "&start=" + getDate() + "&end=" + getDate() + "&pending=false"
+        axios.get(url).then(res => {
+            if (res.data.success && res.data.data.list.length === 0) {
+                var notification = new Notification('嘿！', {
+                    body: '加班辛苦了，记得打卡哦',
+                    icon: '/assets/clock.png',// "图标路径，若不指定默认为favicon"
+                });
 
-            notification.addEventListener('click', function () {
-                //window.open("chrome-extension://" + chrome.runtime.id + "/newtab.html")
-                //overtimeClockIn()
-                notification.close()
-            });
-        }
-    });
+                notification.addEventListener('click', function () {
+                    //window.open("chrome-extension://" + chrome.runtime.id + "/newtab.html")
+                    //overtimeClockIn()
+                    notification.close()
+                });
+            }
+        });
+    }
 }
 
 notification();
 
-var notice;
-var flag = true;
 // 超过配置的时间后，开始检测是否打开
-if (new Date().getHours() >= config.Hour && flag) {
-    notice = setInterval(() => {
-        notification()
-    }, 60000 * 30);
-}
+notice = setInterval(() => {
+    notification()
+}, 60000 * 30);
